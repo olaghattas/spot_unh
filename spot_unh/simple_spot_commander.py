@@ -25,6 +25,8 @@ TRIGGER_SERVICES = [
     "estop/gentle",
     "estop/release",
     "undock",
+    "arm_stow",
+    "arm_unstow",
 ]
 
 

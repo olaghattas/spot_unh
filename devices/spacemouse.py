@@ -221,6 +221,7 @@ class SpaceMouse:
         self._display_controls()
 
         self.single_click_and_hold = False
+        self.stow = True
 
         self._control = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self._reset_state = 0
@@ -253,7 +254,7 @@ class SpaceMouse:
 
         print("")
         print_command("Control", "Command")
-        print_command("Right button", "reset simulation")
+        print_command("Right button", "Stow/Unstow")
         print_command("Left button (hold)", "close gripper")
         print_command("Move mouse laterally", "move arm horizontally in x-y plane")
         print_command("Move mouse vertically", "move arm vertically")
@@ -275,6 +276,7 @@ class SpaceMouse:
         self._control = np.zeros(6)
         # Reset grasp
         self.single_click_and_hold = False
+        self.stow = True
 
     def start_control(self):
         """
@@ -312,6 +314,12 @@ class SpaceMouse:
             # print("d read")
             print("d[0] ==: ", d[0])
             print("d[1] ==: ", d[1])
+            # right 3,2
+            # left 3,1
+            # released both 3,0
+            # both 3,3
+            # d[0]
+            # d[1]
 
             if d is not None and self._enabled:
                     if d[0] == 1:  ## readings from 6-DoF sensor
@@ -335,24 +343,36 @@ class SpaceMouse:
                         print("_control", self._control)
 
                     elif d[0] == 3:  ## readings from the side buttons
-                        # press left button
+                        # only left button pressed
                         if d[1] == 1:
                             t_click = time.time()
                             elapsed_time = t_click - t_last_click
                             t_last_click = t_click
                             self.single_click_and_hold = True
+                            self.stow = False
                             print("self.single_click_and_hold", self.single_click_and_hold)
 
-                        # release left button
+                        # release right and left button
                         if d[1] == 0:
                             self.single_click_and_hold = False
+                            self.stow = False
                             print("self.single_click_and_hold", self.single_click_and_hold)
+                            print("self.stow", self.single_click_and_hold)
 
-                    # right button is for reset
-                        if d[1] == 2:
-                            self._reset_state = 1
-                            self._enabled = False
-                            self._reset_internal_state()
+                        # only right button pressed
+                        if d[1] == 0:
+                            self.stow = False
+                            self.single_click_and_hold = False
+                            print("self.stow", self.single_click_and_hold)
+
+                        # right and left button pressed
+                        if d[1] == 3:
+                            self.single_click_and_hold = True
+                            self.stow = True
+                            print("self.single_click_and_hold", self.single_click_and_hold)
+                            print("self.stow", self.single_click_and_hold)
+
+
 
     @property
     def control(self):
@@ -381,8 +401,13 @@ if __name__ == "__main__":
     space_mouse = SpaceMouse()
     ## run to start
     space_mouse.start_control()
-    while True:
-        print(space_mouse._control, space_mouse.single_click_and_hold)
-        time.sleep(0.02)
 
+    try:
+        while True:
+            # print(space_mouse._control, space_mouse.single_click_and_hold)
+            time.sleep(0.02)
+    except KeyboardInterrupt:
+        space_mouse.stop()
+        time.sleep(0.02)
+        print("Received keyboard interrupt. Shutting down Teleop.")
 

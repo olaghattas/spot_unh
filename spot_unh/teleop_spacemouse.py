@@ -17,6 +17,11 @@ from spot_msgs.action import RobotCommand  # type: ignore
 
 from .simple_spot_commander import SimpleSpotCommander
 from devices.spacemouse import SpaceMouse
+
+
+###
+# TODO: CHANGE LOGIC ON PRESS THINGS SHOULD CHANGE
+## RN WHEN left or right are pressed and held the thing holds
 class Teleop:
     def __init__(self, robot_name: Optional[str] = None, node: Optional[Node] = None) -> None:
         self._logger = logging.getLogger(fqn(self.__class__))
@@ -41,15 +46,19 @@ class Teleop:
         self.space_mouse.start_control()
 
         self.timer = node.create_timer(0.50, self.timer_callback)
+        self.prev_arm_stow = True
+        ## to do only chnage gripper when changed
+        #TODO: figure how do you want to signal open and close
+        self.previous_single_click_and_hold = False
 
     def timer_callback(self):
         # This function is called every 5 seconds
         self._logger.info("Timer callback executed.")
 
         if (self.space_mouse.single_click_and_hold):
-            gripper_command = RobotCommandBuilder.claw_gripper_open_fraction_command(1.0)
-        else:
             gripper_command = RobotCommandBuilder.claw_gripper_open_fraction_command(0.0)
+        else:
+            gripper_command = RobotCommandBuilder.claw_gripper_open_fraction_command(1.0)
 
         # Convert to a ROS message
         action_goal = RobotCommand.Goal()
@@ -57,6 +66,22 @@ class Teleop:
         # Send the request and wait until the arm arrives at the goal
         self._logger.info("Moving arm to position 1.")
         self._robot_command_client.send_goal_and_wait("arm_move_one", action_goal)
+
+        if (self.space_mouse.stow != self.prev_arm_stow):
+            ## we need to change from stow to unstow or vice verse
+            if (self.space_mouse.stow):
+                self._logger.info("stowing robot arm")
+                result = self._robot.command("arm_stow")
+                if not result.success:
+                    self._logger.error("Unable to stow robot " + result.message)
+            else:
+                self._logger.info("unstowing robot arm")
+                result = self._robot.command("arm_unstow")
+                if not result.success:
+                    self._logger.error("Unable to unstow robot " + result.message)
+            self.prev_arm_stow = not self.prev_arm_stow
+
+
 
 
     def initialize_robot(self) -> bool:
@@ -87,6 +112,13 @@ class Teleop:
             self._logger.error("Robot did not stand message was " + result.message)
             return False
         self._logger.info("Successfully stood up.")
+
+        # should be always stowed at beginning
+
+        self._logger.info("stowing robot arm")
+        result = self._robot.command("arm_stow")
+        if not result.success:
+            self._logger.error("Unable to stow robot " + result.message)
 
         self.move_arm()
         return True
