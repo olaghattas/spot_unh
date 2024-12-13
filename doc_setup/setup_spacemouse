@@ -1,0 +1,30 @@
+setup based on instructions from https://zhuyifengzju.github.io/deoxys_docs/html/tutorials/using_teleoperation_devices.html
+uninstall hid if you have it installed
+
+step 1: install hidapi with 
+    pip install hidapi
+    sudo apt install libhidapi-dev
+
+
+step 2: Get vendor_id and product_id of your space mouse 
+    pyton3
+    import hid
+    hid.enumerate()
+    #'vendor_id': 9583, 'product_id': 50770
+    # look for the ones with 'manufacturer_string':3Dconnexion
+
+step 3: run lsub to get idVendor and idProduct
+where is going to look something like this
+Bus 001 Device 009: ID idVendor:idProduct 3Dconnexion Universal Receiver
+
+step 4: use the id you get to set udev rules 
+cd /etc/udev/rules.d/ && sudo nano xx-spacemouse.rules where xx is value greater than 50
+add in .rules file
+    KERNEL=="hidraw*", ATTRS{idVendor}=="256f", ATTRS{idProduct}=="c652", MODE="0666", GROUP="plugdev"
+    SUBSYSTEM=="usb", ATTRS{idVendor}=="256f", ATTRS{idProduct}=="c652", MODE="0666", GROUP="plugdev"
+
+then load udev rules with: sudo udevadm control --reload-rules
+
+may need to install sudo apt install libmotif-dev for udev to work without sudo but i didnt need to
+
+to test you can run python3 spacemouse.py located in devices folder and check if value changes when you move the mouse. you need to use you vendor and product id
