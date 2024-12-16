@@ -202,7 +202,12 @@ class Teleop:
             print("dpos", dpos)
             print("quat", quat)
             arm_command = self.get_armcommand(dpos, quat)
-            command = RobotCommandBuilder.build_synchro_command(arm_command)
+            # Tell the robot's body to follow the arm
+            follow_arm_command = RobotCommandBuilder.follow_arm_command()
+
+            # Combine the arm and mobility commands into one synchronized command.
+            command = RobotCommandBuilder.build_synchro_command(follow_arm_command,arm_command)
+
             action_goal = RobotCommand.Goal()
             convert(command, action_goal.command)
             # Send the request and wait until the arm arrives at the goal

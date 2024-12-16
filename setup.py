@@ -24,10 +24,11 @@ setup(
     entry_points={
         'console_scripts': [
             "walk_forward = spot_unh.walk_forward:main",
+            "endeff = spot_unh.simple_endeff_movement:main",
+            "endeff_odom = spot_unh.endeff_movement_wrt_odom:main",
             "teleop_sm = spot_unh.teleop_spacemouse:main",
+            "teleop_sm_body = spot_unh.teleop_spacemouse_body_follows:main",
             "minimal = spot_unh.minimal:main",
-
-
         ],
     },
 )

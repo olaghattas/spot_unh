@@ -220,8 +220,9 @@ class SpaceMouse:
 
         self._display_controls()
 
-        self.single_click_and_hold = False
-        self.stow = True
+        self.open_gripper = False
+        self.unstow_arm = False
+
 
         self._control = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self._reset_state = 0
@@ -254,7 +255,7 @@ class SpaceMouse:
 
         print("")
         print_command("Control", "Command")
-        print_command("Right button", "Stow/Unstow")
+        print_command("Right button", "Stow/Ununstow_arm")
         print_command("Left button (hold)", "close gripper")
         print_command("Move mouse laterally", "move arm horizontally in x-y plane")
         print_command("Move mouse vertically", "move arm vertically")
@@ -275,8 +276,8 @@ class SpaceMouse:
         # Reset control
         self._control = np.zeros(6)
         # Reset grasp
-        self.single_click_and_hold = False
-        self.stow = True
+        self.open_gripper = False 
+        self.unstow_arm = False
 
     def start_control(self):
         """
@@ -287,6 +288,30 @@ class SpaceMouse:
         self._reset_state = 0
         self._enabled = True
 
+    def rpy_to_rotation_matrix_and_angles(self, roll, pitch, yaw):
+    # Construct individual rotation matrices for yaw, pitch, and roll
+        yawMatrix = np.array([
+            [math.cos(yaw), -math.sin(yaw), 0],
+            [math.sin(yaw), math.cos(yaw), 0],
+            [0, 0, 1]
+        ])
+
+        pitchMatrix = np.array([
+            [math.cos(pitch), 0, math.sin(pitch)],
+            [0, 1, 0],
+            [-math.sin(pitch), 0, math.cos(pitch)]
+        ])
+
+        rollMatrix = np.array([
+            [1, 0, 0],
+            [0, math.cos(roll), -math.sin(roll)],
+            [0, math.sin(roll), math.cos(roll)]
+        ])
+
+        # Compute the combined rotation matrix
+        Rot = np.dot(np.dot(yawMatrix, pitchMatrix), rollMatrix)
+        return Rot
+
     def get_controller_state(self):
         """
         Grabs the current state of the 3D mouse.
@@ -294,26 +319,40 @@ class SpaceMouse:
         Returns:
             dict: A dictionary containing dpos, orn, unmodified orn, grasp, and reset
         """
-        dpos = self.control[:3] * 0.005 * self.pos_sensitivity
-        roll, pitch, yaw = self.control[3:] * 0.005 * self.rot_sensitivity
+        dpos = self.control[:3] * self.pos_sensitivity * 0.005
+        roll, pitch, yaw = self.control[3:] * 0.5 * self.rot_sensitivity
 
-        # convert RPY to an absolute orientation
-        drot1 = rotation_matrix(angle=-pitch, direction=[1.0, 0, 0], point=None)[:3, :3]
-        drot2 = rotation_matrix(angle=roll, direction=[0, 1.0, 0], point=None)[:3, :3]
-        drot3 = rotation_matrix(angle=yaw, direction=[0, 0, 1.0], point=None)[:3, :3]
+        # # convert RPY to an absolute orientation
+        # drot1 = rotation_matrix(angle=-pitch, direction=[1.0, 0, 0], point=None)[:3, :3]
+        # drot2 = rotation_matrix(angle=roll, direction=[0, 1.0, 0], point=None)[:3, :3]
+        # drot3 = rotation_matrix(angle=yaw, direction=[0, 0, 1.0], point=None)[:3, :3]
 
-        self.rotation = self.rotation.dot(drot1.dot(drot2.dot(drot3)))
+        rotation = self.rpy_to_rotation_matrix_and_angles(roll, pitch, yaw)
+
+        return dpos, rotation,
+
+
+    def input2action(self):
+        dpos, drotation = self.get_controller_state()
+        #       Also note that the outputted rotation is an absolute rotation, while outputted dpos is delta pos
+        #       Raw delta rotations from neutral user input is captured in raw_drotation (roll, pitch, yaw)
+
+
+        dpos[0] = - dpos[0] # so moving space mouse forward gives +
+        dpos[1] = - dpos[1] # rigth is +
+
+
+        dpos *= 10
+        return dpos, drotation
 
     def run(self):
         """Listener method that keeps pulling new messages."""
 
-        t_last_click = -1
-
         while not self._stop_event.is_set():
             d = self.device.read(13)
             # print("d read")
-            print("d[0] ==: ", d[0])
-            print("d[1] ==: ", d[1])
+            # print("d[0] ==: ", d[0])
+            # print("d[1] ==: ", d[1])
             # right 3,2
             # left 3,1
             # released both 3,0
@@ -323,7 +362,6 @@ class SpaceMouse:
 
             if d is not None and self._enabled:
                     if d[0] == 1:  ## readings from 6-DoF sensor
-                        print(" d[0] == 1:  ^DOF SENSOR")
                         self.y = convert(d[1], d[2])
                         self.x = convert(d[3], d[4])
                         self.z = convert(d[5], d[6]) * -1.0
@@ -340,38 +378,25 @@ class SpaceMouse:
                             self.pitch,
                             self.yaw,
                         ]
-                        print("_control", self._control)
+                        # print("_control", self._control)
 
                     elif d[0] == 3:  ## readings from the side buttons
                         # only left button pressed
                         if d[1] == 1:
-                            t_click = time.time()
-                            elapsed_time = t_click - t_last_click
-                            t_last_click = t_click
-                            self.single_click_and_hold = True
-                            self.stow = False
-                            print("self.single_click_and_hold", self.single_click_and_hold)
-
-                        # release right and left button
-                        if d[1] == 0:
-                            self.single_click_and_hold = False
-                            self.stow = False
-                            print("self.single_click_and_hold", self.single_click_and_hold)
-                            print("self.stow", self.single_click_and_hold)
+                            self.open_gripper = not self.open_gripper
+                            # print("self.open_gripper", self.open_gripper)
 
                         # only right button pressed
-                        if d[1] == 0:
-                            self.stow = False
-                            self.single_click_and_hold = False
-                            print("self.stow", self.single_click_and_hold)
+                        if d[1] == 2:
+                            self.unstow_arm = not self.unstow_arm
+                            # print("self.unstow_arm", self.unstow_arm)
 
                         # right and left button pressed
                         if d[1] == 3:
-                            self.single_click_and_hold = True
-                            self.stow = True
-                            print("self.single_click_and_hold", self.single_click_and_hold)
-                            print("self.stow", self.single_click_and_hold)
-
+                            self.open_gripper = not self.open_gripper
+                            self.unstow_arm = not self.unstow_arm
+                            # print("self.open_gripper", self.open_gripper)
+                            # print("self.unstow_arm", self.unstow_arm)
 
 
     @property
@@ -392,7 +417,7 @@ class SpaceMouse:
         Returns:
             float: Whether we're using single click and hold or not
         """
-        if self.single_click_and_hold:
+        if self.open_gripper:
             return 1.0
         return 0
 
@@ -404,7 +429,7 @@ if __name__ == "__main__":
 
     try:
         while True:
-            # print(space_mouse._control, space_mouse.single_click_and_hold)
+            # print(space_mouse._control, space_mouse.open_gripper)
             time.sleep(0.02)
     except KeyboardInterrupt:
         space_mouse.stop()
