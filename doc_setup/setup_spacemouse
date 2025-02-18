@@ -13,7 +13,7 @@ step 2: Get vendor_id and product_id of your space mouse
     #'vendor_id': 9583, 'product_id': 50770
     # look for the ones with 'manufacturer_string':3Dconnexion
 
-step 3: run lsub to get idVendor and idProduct
+step 3: run lsusb to get idVendor and idProduct
 where is going to look something like this
 Bus 001 Device 009: ID idVendor:idProduct 3Dconnexion Universal Receiver
 
